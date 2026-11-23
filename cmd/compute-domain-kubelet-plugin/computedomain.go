@@ -213,7 +213,7 @@ func (m *ComputeDomainManager) GetComputeDomainChannelContainerEdits(devRoot str
 // GetCDIContainerEditsCommon() returns the CDI spec edits always required for
 // launching the CD Daemon (whether or not it tries to launch an IMEX daemon
 // internally).
-func (s *ComputeDomainDaemonSettings) GetCDIContainerEditsCommon(ctx context.Context) (*cdiapi.ContainerEdits, error) {
+func (s *ComputeDomainDaemonSettings) GetCDIContainerEditsCommon(ctx context.Context, cliqueID string, nodeLocalFabricIPCEnabled bool) (*cdiapi.ContainerEdits, error) {
 	cd, err := s.manager.GetComputeDomain(ctx, s.domainID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting compute domain %s: %w", s.domainID, err)
@@ -225,7 +225,8 @@ func (s *ComputeDomainDaemonSettings) GetCDIContainerEditsCommon(ctx context.Con
 	edits := &cdiapi.ContainerEdits{
 		ContainerEdits: &cdispec.ContainerEdits{
 			Env: []string{
-				fmt.Sprintf("CLIQUE_ID=%s", s.manager.CliqueID()),
+				fmt.Sprintf("CLIQUE_ID=%s", cliqueID),
+				fmt.Sprintf("NODE_LOCAL_FABRIC_IPC_ENABLED=%t", nodeLocalFabricIPCEnabled),
 				fmt.Sprintf("COMPUTE_DOMAIN_UUID=%s", cd.UID),
 				fmt.Sprintf("COMPUTE_DOMAIN_NAME=%s", cd.Name),
 				fmt.Sprintf("COMPUTE_DOMAIN_NAMESPACE=%s", cd.Namespace),
@@ -340,7 +341,11 @@ func (m *ComputeDomainManager) isCurrentNodeReadyInStatus(cd *nvapi.ComputeDomai
 
 // isCurrentNodeReadyInClique checks if the current node is marked as ready in the ComputeDomainClique.
 func (m *ComputeDomainManager) isCurrentNodeReadyInClique(ctx context.Context, cd *nvapi.ComputeDomain) bool {
-	cliqueName := fmt.Sprintf("%s.%s", cd.UID, m.CliqueID())
+	cliqueID := m.CliqueID()
+	if cliqueID == "" {
+		return false
+	}
+	cliqueName := fmt.Sprintf("%s.%s", cd.UID, cliqueID)
 
 	clique, err := m.config.clientsets.Nvidia.ResourceV1beta1().ComputeDomainCliques(m.config.flags.namespace).Get(ctx, cliqueName, metav1.GetOptions{})
 	if err != nil {

@@ -52,6 +52,7 @@ const (
 
 type Flags struct {
 	cliqueID               string
+	nodeLocalFabricIPC     bool
 	computeDomainUUID      string
 	computeDomainName      string
 	computeDomainNamespace string
@@ -107,6 +108,12 @@ func newApp() *cli.App {
 			Usage:       "The clique ID for this node.",
 			EnvVars:     []string{"CLIQUE_ID"},
 			Destination: &flags.cliqueID,
+		},
+		&cli.BoolFlag{
+			Name:        "node-local-fabric-ipc-enabled",
+			Usage:       "Whether the kubelet plugin enabled node-local IMEX for this daemon.",
+			EnvVars:     []string{"NODE_LOCAL_FABRIC_IPC_ENABLED"},
+			Destination: &flags.nodeLocalFabricIPC,
 		},
 		&cli.StringFlag{
 			Name:        "compute-domain-uuid",
@@ -240,7 +247,7 @@ func run(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
 	// A node-local domain has no NVML clique, but fabric handles still need a
 	// running IMEX service to broker export and import metadata.
 	if flags.cliqueID == "" {
-		if featuregates.Enabled(featuregates.NodeLocalFabricIPC) {
+		if flags.nodeLocalFabricIPC {
 			return runNodeLocalIMEX(ctx, flags)
 		}
 		klog.Infof("no cliqueID: skipping controller and IMEX daemon management")
@@ -450,7 +457,7 @@ func IMEXDaemonUpdateLoopWithDNSNames(ctx context.Context, controller *Controlle
 // check verifies if the node is IMEX capable and if so, checks if the IMEX daemon is ready.
 // It returns an error if any step fails.
 func check(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
-	if flags.cliqueID == "" && !featuregates.Enabled(featuregates.NodeLocalFabricIPC) {
+	if flags.cliqueID == "" && !flags.nodeLocalFabricIPC {
 		fmt.Println("check succeeded (noop, clique ID is empty)")
 		return nil
 	}
