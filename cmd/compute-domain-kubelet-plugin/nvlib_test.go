@@ -57,17 +57,17 @@ type nodeLocalNVML struct {
 func (nodeLocalNVML) InitWithFlags(uint32) nvml.Return { return nvml.SUCCESS }
 func (nodeLocalNVML) Shutdown() nvml.Return            { return nvml.SUCCESS }
 
-func TestGetCliqueIDNodeLocalRequiresFabric(t *testing.T) {
+func TestDetectNodeLocalFabric(t *testing.T) {
 	for name, tc := range map[string]struct {
 		enabled   bool
 		fabric    bool
 		broken    bool
-		wantError string
+		wantLocal bool
 	}{
-		"gate disabled":   {},
-		"no fabric":       {enabled: true, wantError: "requires a Fabric Manager-managed NVLink fabric"},
-		"NVSwitch fabric": {enabled: true, fabric: true},
-		"detection error": {enabled: true, broken: true, wantError: "failed to check if node has local fabric"},
+		"gate disabled":   {fabric: true},
+		"no fabric":       {enabled: true},
+		"NVSwitch fabric": {enabled: true, fabric: true, wantLocal: true},
+		"detection error": {enabled: true, broken: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			setNodeLocalFabricIPCForTest(t, tc.enabled)
@@ -80,13 +80,11 @@ func TestGetCliqueIDNodeLocalRequiresFabric(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(hostRoot, "proc"), nil, 0600))
 			}
 			l := deviceLib{Interface: noCliqueDevices{}, nvmllib: nodeLocalNVML{}, devRoot: hostRoot}
+			require.NoError(t, l.detectFabricManagerFabric())
+			assert.Equal(t, tc.wantLocal, l.nodeLocalFabricIPCEnabled)
 			cliqueID, err := l.getCliqueID()
 			assert.Empty(t, cliqueID)
-			if tc.wantError != "" {
-				require.ErrorContains(t, err, tc.wantError)
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
